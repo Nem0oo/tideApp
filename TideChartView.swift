@@ -193,7 +193,7 @@ struct TideChartView: View {
     }
 
     @ViewBuilder
-    private func nightShading(xFor: (Date) -> CGFloat, insets: UIEdgeInsets, plotHeight: CGFloat,
+    private func nightShading(xFor: @escaping (Date) -> CGFloat, insets: UIEdgeInsets, plotHeight: CGFloat,
                               minDate: TimeInterval, maxDate: TimeInterval) -> some View {
         let windowStart = Date(timeIntervalSinceReferenceDate: minDate)
         let windowEnd = Date(timeIntervalSinceReferenceDate: maxDate)
@@ -229,7 +229,7 @@ struct TideChartView: View {
     }
 
     @ViewBuilder
-    private func sunMarkersView(xFor: (Date) -> CGFloat, insets: UIEdgeInsets,
+    private func sunMarkersView(xFor: @escaping (Date) -> CGFloat, insets: UIEdgeInsets,
                                 minDate: TimeInterval, maxDate: TimeInterval, size: CGSize) -> some View {
         let windowStart = Date(timeIntervalSinceReferenceDate: minDate)
         let windowEnd = Date(timeIntervalSinceReferenceDate: maxDate)
