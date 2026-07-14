@@ -31,7 +31,7 @@ jobs:
             -v ${{ github.workspace }}:/home/builder/code \
             -w /home/builder/code \
             docker.io/nem0oo/theos \
-            make package PACKAGE_FORMAT=ipa
+            make package PACKAGE_FORMAT=ipa FINALPACKAGE=1
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
