@@ -1,0 +1,9 @@
+Package: fr.gcourtot.tide
+Name: Tide
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: An awesome SwiftUI application!
+Maintainer: nem0oo
+Author: nem0oo
+Section: Utilities
+Depends: firmware (>= 14.0)
