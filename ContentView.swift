@@ -10,6 +10,7 @@ struct ContentView: View {
     @StateObject private var locationManager = LocationManager()
     @AppStorage(TideService.apiKeyDefaultsKey) private var apiKey: String = ""
     @State private var tideData: [TideData] = []
+    @State private var sunEvents: [SunEvent] = []
     @State private var isLoading = false
     @State private var hasFetchedData = false // Nouvelle variable pour éviter les appels multiples
     @State private var showSettings = false
@@ -30,7 +31,7 @@ struct ContentView: View {
                     .padding(.top, 8)
                     Spacer()
                 } else if !tideData.isEmpty {
-                    TideChartView(tideData: tideData)
+                    TideChartView(tideData: tideData, sunEvents: sunEvents)
                     List(tideData, id: \.tideDateTime) { tide in
                         HStack {
                             Text("\(tideTypeInFrench(tide.tide_type)) : \(formattedDateAndTime(from: tide.tideDateTime))")
@@ -91,9 +92,10 @@ struct ContentView: View {
         guard let location = locationManager.location else { return }
         
         isLoading = true
-        TideService().fetchTideData(for: location) { tideData in
+        TideService().fetchTideData(for: location) { tideData, sunEvents in
             DispatchQueue.main.async {
                 self.tideData = tideData ?? []
+                self.sunEvents = sunEvents
                 self.isLoading = false
             }
         }
