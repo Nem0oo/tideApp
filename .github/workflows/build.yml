@@ -1,4 +1,4 @@
-name: Autoshoot CI
+name: TideApp CI
 
 on:
   push:
