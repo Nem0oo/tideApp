@@ -8,9 +8,16 @@ import SwiftUI
 
 // Courbe de marée : interpolation cosinus entre les extrêmes (pleine/basse mer),
 // ce qui correspond à l'approximation classique de la variation du niveau d'eau.
+// La chronologie complète chargée est scrollable horizontalement ; `onNeedMoreData`
+// est appelé quand l'utilisateur approche du bord des données déjà récupérées.
 struct TideChartView: View {
     let tideData: [TideData]
     let sunEvents: [SunEvent]
+    var onNeedMoreData: () -> Void = {}
+
+    private static let pointsPerHour: CGFloat = 14
+    private static let insets = UIEdgeInsets(top: 34, left: 30, bottom: 22, right: 16)
+    private static let chartHeight: CGFloat = 190
 
     // Jaune validé pour un accent hors palette de données (identité "soleil"),
     // toujours accompagné d'une icône + heure (le contraste seul est insuffisant en clair)
@@ -36,33 +43,48 @@ struct TideChartView: View {
         let end: Date
     }
 
-    // Extrêmes triés, limités à une fenêtre autour de maintenant pour rester lisible
-    private var points: [ExtremePoint] {
-        let now = Date()
-        let windowStart = now.addingTimeInterval(-8 * 3600)
-        let windowEnd = now.addingTimeInterval(28 * 3600)
+    private struct ScrollOffsetPreferenceKey: PreferenceKey {
+        static var defaultValue: CGFloat = .infinity
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = min(value, nextValue())
+        }
+    }
 
-        let all = tideData.compactMap { tide -> ExtremePoint? in
+
+    // Tous les extrêmes chargés, triés : plus de fenêtre fixe, tout est scrollable
+    private var points: [ExtremePoint] {
+        tideData.compactMap { tide -> ExtremePoint? in
             guard let date = tide.date, let height = tide.height else { return nil }
             return ExtremePoint(date: date, height: height, isHigh: tide.tide_type == "HIGH")
         }
         .sorted { $0.date < $1.date }
-
-        let windowed = all.filter { $0.date >= windowStart && $0.date <= windowEnd }
-        // Si le filtrage laisse trop peu de points (données anciennes ou futures), on prend les premiers
-        return windowed.count >= 2 ? windowed : Array(all.prefix(6))
     }
 
     var body: some View {
-        if points.count >= 2 {
+        let pts = points
+        if pts.count >= 2 {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Hauteur d'eau (m)")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                GeometryReader { geometry in
-                    chartContent(in: geometry.size)
+                GeometryReader { outerGeo in
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            chartContent(pts: pts)
+                        }
+                        .coordinateSpace(name: "tideScroll")
+                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { minX in
+                            // Le repère est passé à portée du bord visible : on précharge la suite
+                            if minX < outerGeo.size.width * 1.5 {
+                                onNeedMoreData()
+                            }
+                        }
+                        .onAppear {
+                            proxy.scrollTo("now-anchor", anchor: UnitPoint(x: 0.25, y: 0.5))
+                        }
+                    }
                 }
-                .frame(height: 190)
+                .frame(height: Self.chartHeight)
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -70,14 +92,15 @@ struct TideChartView: View {
     }
 
     @ViewBuilder
-    private func chartContent(in size: CGSize) -> some View {
-        let pts = points
-        let insets = UIEdgeInsets(top: 34, left: 30, bottom: 22, right: 8)
-        let plotWidth = size.width - insets.left - insets.right
-        let plotHeight = size.height - insets.top - insets.bottom
+    private func chartContent(pts: [ExtremePoint]) -> some View {
+        let insets = Self.insets
+        let firstDate = pts.first!.date
+        let lastDate = pts.last!.date
+        let totalHours = max(lastDate.timeIntervalSince(firstDate) / 3600, 1)
+        let plotWidth = CGFloat(totalHours) * Self.pointsPerHour
+        let plotHeight = Self.chartHeight - insets.top - insets.bottom
+        let contentWidth = plotWidth + insets.left + insets.right
 
-        let minDate = pts.first!.date.timeIntervalSinceReferenceDate
-        let maxDate = pts.last!.date.timeIntervalSinceReferenceDate
         let heights = pts.map { $0.height }
         let rawSpan = (heights.max()! - heights.min()!)
         let pad = max(rawSpan * 0.15, 0.2)
@@ -85,7 +108,7 @@ struct TideChartView: View {
         let maxH = heights.max()! + pad
 
         let xFor: (Date) -> CGFloat = { date in
-            insets.left + CGFloat((date.timeIntervalSinceReferenceDate - minDate) / max(maxDate - minDate, 1)) * plotWidth
+            insets.left + CGFloat(date.timeIntervalSince(firstDate) / 3600) * Self.pointsPerHour
         }
         let yFor: (Double) -> CGFloat = { h in
             insets.top + CGFloat(1 - (h - minH) / (maxH - minH)) * plotHeight
@@ -110,13 +133,13 @@ struct TideChartView: View {
 
         ZStack(alignment: .topLeading) {
             // Alternance jour/nuit dérivée du cycle du soleil (contexte, pas une 2e série/axe)
-            nightShading(xFor: xFor, insets: insets, plotHeight: plotHeight, minDate: minDate, maxDate: maxDate)
+            nightShading(xFor: xFor, insets: insets, plotHeight: plotHeight, firstDate: firstDate, lastDate: lastDate)
 
             // Grille horizontale discrète + étiquettes de hauteur
             ForEach([minH + pad, (minH + maxH) / 2, maxH - pad], id: \.self) { level in
                 Path { path in
                     path.move(to: CGPoint(x: insets.left, y: yFor(level)))
-                    path.addLine(to: CGPoint(x: size.width - insets.right, y: yFor(level)))
+                    path.addLine(to: CGPoint(x: contentWidth - insets.right, y: yFor(level)))
                 }
                 .stroke(Color.secondary.opacity(0.18), lineWidth: 1)
                 Text(String(format: "%.1f", level))
@@ -145,10 +168,30 @@ struct TideChartView: View {
             .stroke(Color.blue, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
 
             // Repère « maintenant »
-            nowMarker(xFor: xFor, insets: insets, plotHeight: plotHeight, minDate: minDate, maxDate: maxDate)
+            nowMarker(xFor: xFor, insets: insets, plotHeight: plotHeight, firstDate: firstDate, lastDate: lastDate)
 
             // Lever/coucher du soleil : icône + heure au bord de la zone jour/nuit correspondante
-            sunMarkersView(xFor: xFor, insets: insets, minDate: minDate, maxDate: maxDate, size: size)
+            sunMarkersView(xFor: xFor, insets: insets, firstDate: firstDate, lastDate: lastDate, contentWidth: contentWidth)
+
+            // Ancre invisible utilisée pour centrer le scroll initial sur « maintenant »
+            Color.clear
+                .frame(width: 1, height: 1)
+                .position(x: xFor(Date()), y: insets.top + plotHeight / 2)
+                .id("now-anchor")
+
+            // Repère invisible proche du bord chargé : sa position dans le viewport déclenche le préchargement
+            let sentinelDate = lastDate.addingTimeInterval(-min(24 * 3600, totalHours * 3600 * 0.4))
+            Color.clear
+                .frame(width: 1, height: 1)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geo.frame(in: .named("tideScroll")).minX
+                        )
+                    }
+                )
+                .position(x: xFor(sentinelDate), y: insets.top + plotHeight / 2)
 
             // Points extrêmes + étiquettes (hauteur au-dessus/en dessous, heure de l'autre côté)
             ForEach(0..<pts.count, id: \.self) { i in
@@ -163,22 +206,23 @@ struct TideChartView: View {
                 Text(String(format: "%.1f m", p.height))
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(.primary)
-                    .position(x: min(max(x, insets.left + 18), size.width - insets.right - 18),
+                    .position(x: min(max(x, insets.left + 18), contentWidth - insets.right - 18),
                               y: p.isHigh ? y - 14 : y + 14)
                 Text(shortTime(p.date))
                     .font(.caption2)
                     .foregroundColor(.secondary)
-                    .position(x: min(max(x, insets.left + 18), size.width - insets.right - 18),
-                              y: size.height - insets.bottom + 10)
+                    .position(x: min(max(x, insets.left + 18), contentWidth - insets.right - 18),
+                              y: Self.chartHeight - insets.bottom + 10)
             }
         }
+        .frame(width: contentWidth, height: Self.chartHeight)
     }
 
     @ViewBuilder
     private func nowMarker(xFor: (Date) -> CGFloat, insets: UIEdgeInsets, plotHeight: CGFloat,
-                           minDate: TimeInterval, maxDate: TimeInterval) -> some View {
+                           firstDate: Date, lastDate: Date) -> some View {
         let now = Date()
-        if now.timeIntervalSinceReferenceDate >= minDate && now.timeIntervalSinceReferenceDate <= maxDate {
+        if now >= firstDate && now <= lastDate {
             let x = xFor(now)
             Path { path in
                 path.move(to: CGPoint(x: x, y: insets.top))
@@ -194,10 +238,8 @@ struct TideChartView: View {
 
     @ViewBuilder
     private func nightShading(xFor: @escaping (Date) -> CGFloat, insets: UIEdgeInsets, plotHeight: CGFloat,
-                              minDate: TimeInterval, maxDate: TimeInterval) -> some View {
-        let windowStart = Date(timeIntervalSinceReferenceDate: minDate)
-        let windowEnd = Date(timeIntervalSinceReferenceDate: maxDate)
-        ForEach(nightIntervals(from: windowStart, to: windowEnd), id: \.self) { interval in
+                              firstDate: Date, lastDate: Date) -> some View {
+        ForEach(nightIntervals(from: firstDate, to: lastDate), id: \.self) { interval in
             let x0 = xFor(interval.start)
             let x1 = xFor(interval.end)
             Rectangle()
@@ -207,7 +249,7 @@ struct TideChartView: View {
         }
     }
 
-    // Découpe la fenêtre affichée en segments de nuit, à partir des levers/couchers du soleil
+    // Découpe la période affichée en segments de nuit, à partir des levers/couchers du soleil
     private func nightIntervals(from windowStart: Date, to windowEnd: Date) -> [Interval] {
         let daySegments = sunEvents
             .map { Interval(start: max($0.sunrise, windowStart), end: min($0.sunset, windowEnd)) }
@@ -230,11 +272,9 @@ struct TideChartView: View {
 
     @ViewBuilder
     private func sunMarkersView(xFor: @escaping (Date) -> CGFloat, insets: UIEdgeInsets,
-                                minDate: TimeInterval, maxDate: TimeInterval, size: CGSize) -> some View {
-        let windowStart = Date(timeIntervalSinceReferenceDate: minDate)
-        let windowEnd = Date(timeIntervalSinceReferenceDate: maxDate)
-        ForEach(sunMarkers(from: windowStart, to: windowEnd), id: \.self) { marker in
-            let x = min(max(xFor(marker.date), insets.left + 12), size.width - insets.right - 12)
+                                firstDate: Date, lastDate: Date, contentWidth: CGFloat) -> some View {
+        ForEach(sunMarkers(from: firstDate, to: lastDate), id: \.self) { marker in
+            let x = min(max(xFor(marker.date), insets.left + 12), contentWidth - insets.right - 12)
             VStack(spacing: 1) {
                 Image(systemName: marker.isSunrise ? "sunrise.fill" : "sunset.fill")
                     .font(.system(size: 10))
@@ -246,7 +286,7 @@ struct TideChartView: View {
         }
     }
 
-    // Lever/coucher du jour affiché dont l'instant tombe dans la fenêtre visible
+    // Lever/coucher dont l'instant tombe dans la période chargée affichée
     private func sunMarkers(from windowStart: Date, to windowEnd: Date) -> [SunMarker] {
         sunEvents.flatMap { event -> [SunMarker] in
             var markers: [SunMarker] = []

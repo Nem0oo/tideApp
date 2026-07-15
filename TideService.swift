@@ -18,7 +18,16 @@ class TideService {
         return (key?.isEmpty == false) ? key : nil
     }
 
-    func fetchTideData(for location: CLLocation, completion: @escaping ([TideData]?, [SunEvent]) -> Void) {
+    private static let requestDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
+
+    // `startDate`/`numberOfDays` permettent de paginer : on ne charge que quelques jours à la fois,
+    // et on redemande une nouvelle tranche future quand l'utilisateur scrolle vers le bord des données chargées.
+    func fetchTideData(for location: CLLocation, startDate: Date, numberOfDays: Int, completion: @escaping ([TideData]?, [SunEvent]) -> Void) {
         guard let apiKey = TideService.storedAPIKey else {
             print("Aucune clé API configurée")
             completion(nil, [])
@@ -26,10 +35,11 @@ class TideService {
         }
         let lat = location.coordinate.latitude
         let lon = location.coordinate.longitude
-        let urlString = "https://api.worldweatheronline.com/premium/v1/marine.ashx?key=\(apiKey)&q=\(lat),\(lon)&tide=yes&format=json"
+        let dateString = TideService.requestDateFormatter.string(from: startDate)
+        let urlString = "https://api.worldweatheronline.com/premium/v1/marine.ashx?key=\(apiKey)&q=\(lat),\(lon)&tide=yes&date=\(dateString)&num_of_days=\(numberOfDays)&format=json"
 
         guard let url = URL(string: urlString) else { return }
-
+        
         URLSession.shared.dataTask(with: url) { data, response, error in
             guard let data = data, error == nil else {
                 print("Erreur lors de la requête : \(error?.localizedDescription ?? "Inconnue")")
@@ -47,7 +57,10 @@ class TideService {
 
                 completion(allTideData, sunEvents)
             } catch {
-                print("Erreur de parsing JSON : \(error)")
+                // L'API renvoie parfois une erreur (quota, plage de dates non autorisée, etc.)
+                // sous forme de JSON valide mais qui ne correspond pas au schéma attendu : on l'affiche pour diagnostiquer.
+                let rawBody = String(data: data, encoding: .utf8) ?? "<non lisible>"
+                print("Erreur de parsing JSON : \(error)\nRéponse brute de l'API : \(rawBody)")
                 completion(nil, [])
             }
         }.resume()
