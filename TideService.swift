@@ -39,7 +39,7 @@ class TideService {
         let urlString = "https://api.worldweatheronline.com/premium/v1/marine.ashx?key=\(apiKey)&q=\(lat),\(lon)&tide=yes&date=\(dateString)&num_of_days=\(numberOfDays)&format=json"
 
         guard let url = URL(string: urlString) else { return }
-        
+
         URLSession.shared.dataTask(with: url) { data, response, error in
             guard let data = data, error == nil else {
                 print("Erreur lors de la requête : \(error?.localizedDescription ?? "Inconnue")")

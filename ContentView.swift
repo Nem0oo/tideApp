@@ -43,6 +43,7 @@ struct ContentView: View {
                             .font(.caption)
                             .padding(.vertical, 4)
                     }
+
                     List(tideData, id: \.tideDateTime) { tide in
                         HStack {
                             Text("\(tideTypeInFrench(tide.tide_type)) : \(formattedDateAndTime(from: tide.tideDateTime))")
@@ -107,6 +108,7 @@ struct ContentView: View {
 
         isLoading = true
         TideService().fetchTideData(for: location, startDate: startDate, numberOfDays: initialNumberOfDays) { tideData, sunEvents in
+
             DispatchQueue.main.async {
                 self.tideData = tideData ?? []
                 self.sunEvents = sunEvents

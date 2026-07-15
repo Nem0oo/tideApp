@@ -50,6 +50,7 @@ struct TideChartView: View {
         }
     }
 
+
     // Tous les extrêmes chargés, triés : plus de fenêtre fixe, tout est scrollable
     private var points: [ExtremePoint] {
         tideData.compactMap { tide -> ExtremePoint? in
@@ -191,6 +192,9 @@ struct TideChartView: View {
                     }
                 )
                 .position(x: xFor(sentinelDate), y: insets.top + plotHeight / 2)
+
+            // Lever/coucher du soleil : icône + heure au bord de la zone jour/nuit correspondante
+            sunMarkersView(xFor: xFor, insets: insets, minDate: minDate, maxDate: maxDate, size: size)
 
             // Points extrêmes + étiquettes (hauteur au-dessus/en dessous, heure de l'autre côté)
             ForEach(0..<pts.count, id: \.self) { i in
