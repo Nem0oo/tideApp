@@ -50,6 +50,7 @@ struct TideChartView: View {
         }
     }
 
+
     // Tous les extrêmes chargés, triés : plus de fenêtre fixe, tout est scrollable
     private var points: [ExtremePoint] {
         tideData.compactMap { tide -> ExtremePoint? in
