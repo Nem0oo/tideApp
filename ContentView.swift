@@ -5,9 +5,11 @@
 //
  
 import SwiftUI
+import CoreLocation
 
 struct ContentView: View {
     @StateObject private var locationManager = LocationManager()
+    @StateObject private var savedLocationsStore = SavedLocationsStore()
     @AppStorage(TideService.apiKeyDefaultsKey) private var apiKey: String = ""
     @State private var tideData: [TideData] = []
     @State private var sunEvents: [SunEvent] = []
@@ -15,6 +17,9 @@ struct ContentView: View {
     @State private var isLoadingMore = false
     @State private var hasFetchedData = false // Nouvelle variable pour éviter les appels multiples
     @State private var showSettings = false
+    @State private var showLocationPicker = false
+    // Zone choisie manuellement sur la carte ; tant qu'elle est définie, elle prime sur le GPS
+    @State private var manualCoordinate: CLLocationCoordinate2D?
 
     // Nombre de jours chargés par appel API : un premier lot avec un peu d'historique,
     // puis des tranches futures rechargées à la demande pendant le scroll du graphique
@@ -56,10 +61,20 @@ struct ContentView: View {
                     Text("Aucune donnée de marée disponible")
                 }
 
-                if let location = locationManager.location {
-                    Text("Coordonnées : \(location.coordinate.latitude), \(location.coordinate.longitude)")
-                        .font(.caption)
-                        .padding()
+                if let location = effectiveLocation {
+                    HStack {
+                        Text("Coordonnées : \(location.coordinate.latitude), \(location.coordinate.longitude)")
+                            .font(.caption)
+                        if manualCoordinate != nil {
+                            Button("Revenir à ma position") {
+                                manualCoordinate = nil
+                                hasFetchedData = true
+                                refreshTideData()
+                            }
+                            .font(.caption)
+                        }
+                    }
+                    .padding()
                 }
             }
             .navigationTitle("Marées")
@@ -70,7 +85,11 @@ struct ContentView: View {
                             .font(.title2)
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button(action: { showLocationPicker = true }) {
+                        Image(systemName: "map")
+                            .font(.title2)
+                    }
                     Button(action: refreshTideData) {
                         Image(systemName: "arrow.clockwise")
                             .font(.title2)
@@ -80,6 +99,15 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+            }
+            .sheet(isPresented: $showLocationPicker) {
+                LocationPickerView(savedLocationsStore: savedLocationsStore, currentLocation: effectiveLocation) { coordinate in
+                    // CLLocationCoordinate2D n'est pas Equatable sur toutes les toolchains :
+                    // on recharge directement ici plutôt que via .onChange(of: manualCoordinate)
+                    manualCoordinate = coordinate
+                    hasFetchedData = true
+                    refreshTideData()
+                }
             }
             .onAppear {
                 locationManager.startUpdatingLocation()
@@ -98,9 +126,17 @@ struct ContentView: View {
             }
         }
     }
-    
+
+    // Le point choisi manuellement sur la carte prime sur la position GPS tant qu'il est défini
+    private var effectiveLocation: CLLocation? {
+        if let manualCoordinate = manualCoordinate {
+            return CLLocation(latitude: manualCoordinate.latitude, longitude: manualCoordinate.longitude)
+        }
+        return locationManager.location
+    }
+
     private func refreshTideData() {
-        guard let location = locationManager.location else { return }
+        guard let location = effectiveLocation else { return }
 
         // Beaucoup de clés API (marine.ashx) refusent les dates passées : on démarre à aujourd'hui
         let startDate = Date()
@@ -117,7 +153,7 @@ struct ContentView: View {
 
     // Appelé par le graphique quand l'utilisateur scrolle près du bord des données déjà chargées
     private func loadMoreTideData() {
-        guard !isLoadingMore, let location = locationManager.location else { return }
+        guard !isLoadingMore, let location = effectiveLocation else { return }
         guard let currentMax = tideData.compactMap({ $0.date }).max() else { return }
 
         let nextStart = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: currentMax)) ?? currentMax
