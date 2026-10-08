@@ -6,6 +6,7 @@
  
 import SwiftUI
 import CoreLocation
+import WidgetKit
 
 struct ContentView: View {
     @StateObject private var locationManager = LocationManager()
@@ -147,6 +148,7 @@ struct ContentView: View {
                 self.tideData = tideData ?? []
                 self.sunEvents = sunEvents
                 self.isLoading = false
+                self.publishWidgetSnapshot()
             }
         }
     }
@@ -170,8 +172,20 @@ struct ContentView: View {
                 let existingSunrises = Set(self.sunEvents.map { $0.sunrise })
                 let mergedSunEvents = self.sunEvents + newSunEvents.filter { !existingSunrises.contains($0.sunrise) }
                 self.sunEvents = mergedSunEvents.sorted { $0.sunrise < $1.sunrise }
+                self.publishWidgetSnapshot()
             }
         }
+    }
+
+    // Republie un instantané pour le widget dans l'App Group et déclenche son rafraîchissement
+    private func publishWidgetSnapshot() {
+        let extremes = tideData.compactMap { tide -> TideSnapshot.Extreme? in
+            guard let date = tide.date, let height = tide.height else { return nil }
+            return TideSnapshot.Extreme(date: date, height: height, isHigh: tide.tide_type == "HIGH")
+        }.sorted { $0.date < $1.date }
+        let events = sunEvents.map { TideSnapshot.SunEvent(sunrise: $0.sunrise, sunset: $0.sunset) }
+        TideSnapshotStore.save(TideSnapshot(extremes: extremes, sunEvents: events, fetchedAt: Date()))
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func tideTypeInFrench(_ tideType: String) -> String {

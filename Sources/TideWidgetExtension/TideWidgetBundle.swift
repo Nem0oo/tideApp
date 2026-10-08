@@ -1,0 +1,1 @@
+../../TideWidgetBundle.swift
