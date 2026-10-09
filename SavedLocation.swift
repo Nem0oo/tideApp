@@ -6,6 +6,7 @@
 
 import Foundation
 import CoreLocation
+import Observation
 
 struct SavedLocation: Codable, Identifiable, Equatable {
     let id: UUID
@@ -26,10 +27,11 @@ struct SavedLocation: Codable, Identifiable, Equatable {
 }
 
 // Points mémorisés par l'utilisateur pour y revenir rapidement, persistés dans UserDefaults
-final class SavedLocationsStore: ObservableObject {
+@Observable
+final class SavedLocationsStore {
     private static let defaultsKey = "TideSavedLocations"
 
-    @Published private(set) var locations: [SavedLocation] = []
+    private(set) var locations: [SavedLocation] = []
 
     init() {
         load()

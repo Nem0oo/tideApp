@@ -69,7 +69,6 @@ private struct EmptyTideView: View {
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(UIColor.systemBackground))
     }
 }
 
@@ -138,9 +137,7 @@ private struct SmallTideView: View {
                 }
             }
         }
-        .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(Color(UIColor.systemBackground))
     }
 }
 
@@ -193,9 +190,7 @@ private struct MediumTideView: View {
             }
             .frame(width: 96, alignment: .leading)
         }
-        .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(UIColor.systemBackground))
     }
 }
 
@@ -278,6 +273,7 @@ struct TideWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: TideWidgetProvider()) { entry in
             TideWidgetView(entry: entry)
+                .containerBackground(.background, for: .widget)
         }
         .configurationDisplayName("Marées")
         .description("Courbe de marée, prochains extrêmes et prochain lever/coucher du soleil.")

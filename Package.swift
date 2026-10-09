@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "Tide",
-    platforms: [.iOS("16.6")],
+    platforms: [.iOS("17.0")],
     products: [
         .library(name: "Tide", targets: ["Tide"]),
         .library(name: "TideWidgetExtension", targets: ["TideWidgetExtension"]),

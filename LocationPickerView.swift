@@ -6,29 +6,64 @@
 
 import SwiftUI
 import CoreLocation
+import MapKit
 
 // Fenêtre de sélection d'une zone sur la carte, avec des points mémorisés pour y revenir rapidement
 struct LocationPickerView: View {
-    @ObservedObject var savedLocationsStore: SavedLocationsStore
+    var savedLocationsStore: SavedLocationsStore
     var currentLocation: CLLocation?
     var onSelect: (CLLocationCoordinate2D) -> Void
 
-    @Environment(\.presentationMode) private var presentationMode
+    @Environment(\.dismiss) private var dismiss
+    @State private var cameraPosition: MapCameraPosition
     @State private var selectedCoordinate: CLLocationCoordinate2D?
     @State private var showSaveAlert = false
     @State private var newLocationName = ""
 
+    init(savedLocationsStore: SavedLocationsStore, currentLocation: CLLocation?,
+         onSelect: @escaping (CLLocationCoordinate2D) -> Void) {
+        self.savedLocationsStore = savedLocationsStore
+        self.currentLocation = currentLocation
+        self.onSelect = onSelect
+        let initialPosition: MapCameraPosition = currentLocation.map {
+            .region(MKCoordinateRegion(center: $0.coordinate, latitudinalMeters: 20000, longitudinalMeters: 20000))
+        } ?? .automatic
+        _cameraPosition = State(initialValue: initialPosition)
+    }
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
-                MapViewRepresentable(
-                    savedLocations: savedLocationsStore.locations,
-                    selectedCoordinate: $selectedCoordinate,
-                    regionToCenter: currentLocation?.coordinate,
-                    onSelectSaved: { saved in
-                        selectedCoordinate = saved.coordinate
+                // `MapReader` convertit la position d'un tap en coordonnée géographique ; un tap sur
+                // un point mémorisé est capté par son propre geste et ne déclenche pas celui de la carte.
+                MapReader { proxy in
+                    Map(position: $cameraPosition) {
+                        UserAnnotation()
+
+                        ForEach(savedLocationsStore.locations) { saved in
+                            Annotation(saved.name, coordinate: saved.coordinate) {
+                                Image(systemName: "star.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.white)
+                                    .padding(6)
+                                    .background(Circle().fill(Color.blue))
+                                    .onTapGesture {
+                                        selectedCoordinate = saved.coordinate
+                                    }
+                            }
+                        }
+
+                        if let coordinate = selectedCoordinate {
+                            Marker("Position sélectionnée", coordinate: coordinate)
+                                .tint(.red)
+                        }
                     }
-                )
+                    .onTapGesture { screenPoint in
+                        if let coordinate = proxy.convert(screenPoint, from: .local) {
+                            selectedCoordinate = coordinate
+                        }
+                    }
+                }
                 .frame(minHeight: 260)
 
                 List {
@@ -65,12 +100,12 @@ struct LocationPickerView: View {
             .navigationTitle("Choisir une zone")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Annuler") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
                         showSaveAlert = true
                     } label: {
@@ -81,7 +116,7 @@ struct LocationPickerView: View {
                     Button("Choisir") {
                         if let coordinate = selectedCoordinate {
                             onSelect(coordinate)
-                            presentationMode.wrappedValue.dismiss()
+                            dismiss()
                         }
                     }
                     .disabled(selectedCoordinate == nil)
