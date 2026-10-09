@@ -20,21 +20,61 @@ Application iOS (SwiftUI) qui affiche les horaires et hauteurs de marée pour vo
 | `TideService.swift` | Appel réseau à l'API de marée et modèles de décodage JSON |
 | `LocationManager.swift` | Gestion de la localisation de l'utilisateur |
 | `SettingsView.swift` | Écran de saisie/suppression de la clé API |
+| `TideSnapshot.swift` | Instantané des marées partagé entre l'app et le widget (stocké dans l'App Group `group.fr.gcourtot.tide`) |
+| `TideWidgetBundle.swift` | Extension widget (WidgetKit) : courbe de marée, prochains extrêmes et lever/coucher du soleil |
 
 ## Prérequis
 
 - Une clé API [WorldWeatherOnline](https://www.worldweatheronline.com/) (offre gratuite disponible)
-- [Theos](https://theos.dev/) installé et configuré (variable d'environnement `THEOS`)
-- Un SDK iOS/toolchain compatible avec la cible définie dans le `Makefile`
+- Au choix, selon la chaîne de build :
+  - **Theos** : [Theos](https://theos.dev/) installé et configuré (variable d'environnement `THEOS`) et un SDK iOS compatible avec la cible du `Makefile`
+  - **xtool** : Docker et l'image locale `xtool-image` (Swift + xtool + SDK iOS dans les volumes Docker `xtool-swiftpm` et `xtool-sdkcache`). Le SDK Apple ne peut pas être hébergé publiquement : le build xtool se fait donc en local, il n'y a pas de CI GitHub pour lui.
+- Pour publier avec xtool : [`gh`](https://cli.github.com/) authentifié (`gh auth status`)
 
 ## Compilation
+
+L'identifiant du bundle est `fr.gcourtot.tide`. Le même code source (liens symboliques dans `Sources/`) se compile avec les deux chaînes.
+
+### Avec Theos
 
 ```bash
 make package   # compile l'app et génère le .ipa/.deb dans packages/
 make install   # compile, package et installe sur un appareil connecté (SSH ou USB)
 ```
 
-L'identifiant du bundle est `fr.gcourtot.tide`.
+### Avec xtool
+
+Fichiers propres à xtool : `Package.swift`, `xtool.yml`, `Info.plist`, `TideWidgetExtension-Info.plist` et `Sources/` (liens vers les fichiers Swift de la racine).
+
+Build manuel dans l'image (produit `xtool/Tide.ipa`) :
+
+```bash
+docker run --rm --memory=4g \
+  -v xtool-swiftpm:/home/builder/.swiftpm -v xtool-sdkcache:/home/builder/.cache/xtool \
+  -e XCODE_VERSION=26.5 -e XCODE_BUILD=<build> -v "$PWD":/work xtool-image \
+  bash -c 'ulimit -n 65536 && /home/builder/omarchy-apple-dev/ship.sh'
+```
+
+#### Release via le hook Git `pre-push`
+
+Le hook `.githooks/pre-push` construit l'IPA et publie la release GitHub quand vous poussez un tag `vX.Y.Z`.
+
+1. Activer le hook (une fois par clone) : `git config core.hooksPath .githooks`
+2. Créer et pousser le tag : `git tag vX.Y.Z && git push origin vX.Y.Z`
+
+Déroulé :
+- Pendant le push, le hook construit l'IPA du tag (environ 2 minutes, sortie visible dans le terminal). Si le build échoue, le push est annulé.
+- Une fois le tag arrivé sur GitHub, la release est créée en arrière-plan avec `gh release create`. Suivi : `tail -f /tmp/tideapp-release-vX.Y.Z.log` ou `gh release list`.
+- L'IPA est aussi conservé dans `~/.cache/tideapp-releases/vX.Y.Z/`.
+- Pour passer outre le hook : `git push --no-verify`.
+
+Sans hook, ou pour rattraper un tag déjà poussé : `scripts/release.sh vX.Y.Z` (build puis publication). Le mode `--build-only` ne construit que l'IPA.
+
+Points d'attention :
+- L'IPA est signé avec une **identité de test** : il faut le re-signer pour l'installer. Le groupe d'applications `group.fr.gcourtot.tide` (partage de données avec le widget) n'est pas inclus dans cette signature ; `Tide.entitlements` doit être réappliqué à la re-signature.
+- `XCODE_BUILD` (dans `scripts/release.sh`) est provisoire ; mettre le vrai build d'Xcode avant un envoi TestFlight.
+- Un nouveau fichier Swift doit être ajouté aux deux chaînes : dans `Tide_FILES` du `Makefile` et par un lien symbolique dans `Sources/Tide/` (et `Sources/TideWidgetExtension/` s'il sert au widget).
+- Le workflow `.github/workflows/build.yml` (CI Theos) est désactivé : il ne se lance plus que manuellement.
 
 ## Configuration de la clé API
 
