@@ -9,7 +9,7 @@ let package = Package(
         .library(name: "TideWidgetExtension", targets: ["TideWidgetExtension"]),
     ],
     targets: [
-        .target(name: "Tide", swiftSettings: [.swiftLanguageMode(.v5)]),
+        .target(name: "Tide", exclude: ["Assets.xcassets"], swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(name: "TideWidgetExtension", swiftSettings: [.swiftLanguageMode(.v5)]),
     ]
 )

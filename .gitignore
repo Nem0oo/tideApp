@@ -1,5 +1,3 @@
-.theos/
-packages/
 .DS_Store
 api_key.backup
 .build/

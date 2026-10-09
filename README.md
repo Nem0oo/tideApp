@@ -12,11 +12,15 @@ Application iOS (SwiftUI) qui affiche les horaires et hauteurs de marée pour vo
 
 ## Aperçu technique
 
+Cible minimale : iOS 17. Sources dans `Sources/Tide/` (app) et `Sources/TideWidgetExtension/` (widget).
+
 | Fichier | Rôle |
 |---|---|
 | `TideApp.swift` | Point d'entrée de l'application |
 | `ContentView.swift` | Écran principal : affichage du graphique et de la liste des marées |
-| `TideChartView.swift` | Vue du graphique de marée (dessin de la courbe) |
+| `TideChartView.swift` | Graphique de marée (Swift Charts, défilable) |
+| `LocationPickerView.swift` | Choix d'une zone sur la carte et points mémorisés |
+| `SavedLocation.swift` | Points mémorisés (persistés dans `UserDefaults`) |
 | `TideService.swift` | Appel réseau à l'API de marée et modèles de décodage JSON |
 | `LocationManager.swift` | Gestion de la localisation de l'utilisateur |
 | `SettingsView.swift` | Écran de saisie/suppression de la clé API |
@@ -26,27 +30,18 @@ Application iOS (SwiftUI) qui affiche les horaires et hauteurs de marée pour vo
 ## Prérequis
 
 - Une clé API [WorldWeatherOnline](https://www.worldweatheronline.com/) (offre gratuite disponible)
-- Au choix, selon la chaîne de build :
-  - **Theos** : [Theos](https://theos.dev/) installé et configuré (variable d'environnement `THEOS`) et un SDK iOS compatible avec la cible du `Makefile`
-  - **xtool** : Docker et l'image locale `xtool-image` (Swift + xtool + SDK iOS dans les volumes Docker `xtool-swiftpm` et `xtool-sdkcache`). Le SDK Apple ne peut pas être hébergé publiquement : le build xtool se fait donc en local, il n'y a pas de CI GitHub pour lui.
-- Pour publier avec xtool : [`gh`](https://cli.github.com/) authentifié (`gh auth status`)
+- Docker et l'image locale `xtool-image` (Swift + xtool + SDK iOS dans les volumes Docker `xtool-swiftpm` et `xtool-sdkcache`). Le SDK Apple ne peut pas être hébergé publiquement : le build se fait donc en local, il n'y a pas de CI GitHub.
+- Pour publier une release : [`gh`](https://cli.github.com/) authentifié (`gh auth status`)
 
 ## Compilation
 
-L'identifiant du bundle est `fr.gcourtot.tide`. Le même code source (liens symboliques dans `Sources/`) se compile avec les deux chaînes.
+L'identifiant du bundle est `fr.gcourtot.tide`, le build passe par [xtool](https://xtool.sh).
 
-### Avec Theos
+Fichiers de configuration : `Package.swift`, `xtool.yml`, `Info.plist`, `TideWidgetExtension-Info.plist` et les `.entitlements`.
 
-```bash
-make package   # compile l'app et génère le .ipa/.deb dans packages/
-make install   # compile, package et installe sur un appareil connecté (SSH ou USB)
-```
+Build de l'arbre de travail tel quel (modifications non commitées comprises) : `scripts/build-local.sh` (IPA dans `xtool/Tide.ipa`), ou `scripts/build-local.sh --quick` pour une simple compilation.
 
-### Avec xtool
-
-Fichiers propres à xtool : `Package.swift`, `xtool.yml`, `Info.plist`, `TideWidgetExtension-Info.plist` et `Sources/` (liens vers les fichiers Swift de la racine).
-
-Build manuel dans l'image (produit `xtool/Tide.ipa`) :
+Équivalent manuel dans l'image (produit `xtool/Tide.ipa`) :
 
 ```bash
 docker run --rm --memory=4g \
@@ -73,8 +68,7 @@ Sans hook, ou pour rattraper un tag déjà poussé : `scripts/release.sh vX.Y.Z`
 Points d'attention :
 - L'IPA est signé avec une **identité de test** : il faut le re-signer pour l'installer. Le groupe d'applications `group.fr.gcourtot.tide` (partage de données avec le widget) n'est pas inclus dans cette signature ; `Tide.entitlements` (app) et `TideWidgetExtension.entitlements` (widget) doivent être réappliqués à la re-signature, sinon le widget reste vide (il affiche alors « App Group indisponible »).
 - `XCODE_BUILD` (dans `scripts/release.sh`) est provisoire ; mettre le vrai build d'Xcode avant un envoi TestFlight.
-- Un nouveau fichier Swift doit être ajouté aux deux chaînes : dans `Tide_FILES` du `Makefile` et par un lien symbolique dans `Sources/Tide/` (et `Sources/TideWidgetExtension/` s'il sert au widget).
-- Le workflow `.github/workflows/build.yml` (CI Theos) est désactivé : il ne se lance plus que manuellement.
+- Un nouveau fichier Swift se place dans `Sources/Tide/`. S'il sert aussi au widget, ajouter un lien symbolique dans `Sources/TideWidgetExtension/` (c'est le cas de `TideSnapshot.swift`).
 
 ## Configuration de la clé API
 

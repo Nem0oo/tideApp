@@ -1,1 +1,1 @@
-../../TideSnapshot.swift
+../Tide/TideSnapshot.swift
