@@ -1,0 +1,8 @@
+version: 1
+bundleID: fr.gcourtot.tide
+product: Tide
+infoPath: Info.plist
+extensions:
+  - product: TideWidgetExtension
+    bundleID: fr.gcourtot.tide.TideWidget
+    infoPath: TideWidgetExtension-Info.plist

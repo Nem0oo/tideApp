@@ -2,3 +2,7 @@
 packages/
 .DS_Store
 api_key.backup
+.build/
+xtool/
+*.xip
+.sourcekit-lsp/
