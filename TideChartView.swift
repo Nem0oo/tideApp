@@ -303,6 +303,7 @@ struct TideChartView: View {
     private func shortTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
+        formatter.timeZone = tideData.first?.timeZone ?? .current
         return formatter.string(from: date)
     }
 }

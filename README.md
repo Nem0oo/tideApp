@@ -71,7 +71,7 @@ Déroulé :
 Sans hook, ou pour rattraper un tag déjà poussé : `scripts/release.sh vX.Y.Z` (build puis publication). Le mode `--build-only` ne construit que l'IPA.
 
 Points d'attention :
-- L'IPA est signé avec une **identité de test** : il faut le re-signer pour l'installer. Le groupe d'applications `group.fr.gcourtot.tide` (partage de données avec le widget) n'est pas inclus dans cette signature ; `Tide.entitlements` doit être réappliqué à la re-signature.
+- L'IPA est signé avec une **identité de test** : il faut le re-signer pour l'installer. Le groupe d'applications `group.fr.gcourtot.tide` (partage de données avec le widget) n'est pas inclus dans cette signature ; `Tide.entitlements` (app) et `TideWidgetExtension.entitlements` (widget) doivent être réappliqués à la re-signature, sinon le widget reste vide (il affiche alors « App Group indisponible »).
 - `XCODE_BUILD` (dans `scripts/release.sh`) est provisoire ; mettre le vrai build d'Xcode avant un envoi TestFlight.
 - Un nouveau fichier Swift doit être ajouté aux deux chaînes : dans `Tide_FILES` du `Makefile` et par un lien symbolique dans `Sources/Tide/` (et `Sources/TideWidgetExtension/` s'il sert au widget).
 - Le workflow `.github/workflows/build.yml` (CI Theos) est désactivé : il ne se lance plus que manuellement.

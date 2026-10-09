@@ -33,11 +33,12 @@ struct TideWidgetProvider: TimelineProvider {
     }
 }
 
-private let widgetTimeFormatter: DateFormatter = {
+private func widgetTime(_ date: Date, in snapshot: TideSnapshot) -> String {
     let formatter = DateFormatter()
     formatter.dateFormat = "HH:mm"
-    return formatter
-}()
+    formatter.timeZone = snapshot.timeZone
+    return formatter.string(from: date)
+}
 
 struct TideWidgetView: View {
     @Environment(\.widgetFamily) private var family
@@ -63,12 +64,28 @@ private struct EmptyTideView: View {
             Image(systemName: "water.waves")
                 .font(.title2)
                 .foregroundColor(.blue)
-            Text("Ouvrez Marées")
+            Text(TideSnapshotStore.isAvailable ? "Ouvrez Marées" : "App Group indisponible")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(UIColor.systemBackground))
+    }
+}
+
+// Signale que l'instantané ne couvre bientôt plus les prochaines heures (il faut rouvrir l'app)
+private struct StaleBadge: View {
+    let snapshot: TideSnapshot
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text("Données du \(snapshot.fetchedAt, format: .dateTime.day().month())")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
     }
 }
 
@@ -99,7 +116,7 @@ private struct SmallTideView: View {
                             .foregroundColor(extreme.isHigh ? .blue : .cyan)
                         Text(String(format: "%.1f m", extreme.height))
                             .font(.caption2.weight(.medium))
-                        Text(widgetTimeFormatter.string(from: extreme.date))
+                        Text(widgetTime(extreme.date, in: snapshot))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -108,12 +125,14 @@ private struct SmallTideView: View {
 
             Spacer(minLength: 0)
 
-            if let sun = snapshot.nextSunEvent(after: now) {
+            if snapshot.isStale(at: now) {
+                StaleBadge(snapshot: snapshot)
+            } else if let sun = snapshot.nextSunEvent(after: now) {
                 HStack(spacing: 4) {
                     Image(systemName: sun.isSunrise ? "sunrise.fill" : "sunset.fill")
                         .font(.caption2)
                         .foregroundColor(.orange)
-                    Text(widgetTimeFormatter.string(from: sun.date))
+                    Text(widgetTime(sun.date, in: snapshot))
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -150,19 +169,21 @@ private struct MediumTideView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(String(format: "%.1f m", extreme.height))
                                 .font(.caption.weight(.semibold))
-                            Text(widgetTimeFormatter.string(from: extreme.date))
+                            Text(widgetTime(extreme.date, in: snapshot))
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
                     }
                 }
 
-                if let sun = snapshot.nextSunEvent(after: now) {
+                if snapshot.isStale(at: now) {
+                StaleBadge(snapshot: snapshot)
+            } else if let sun = snapshot.nextSunEvent(after: now) {
                     HStack(spacing: 4) {
                         Image(systemName: sun.isSunrise ? "sunrise.fill" : "sunset.fill")
                             .font(.caption)
                             .foregroundColor(.orange)
-                        Text(widgetTimeFormatter.string(from: sun.date))
+                        Text(widgetTime(sun.date, in: snapshot))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }

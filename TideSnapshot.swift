@@ -24,9 +24,22 @@ struct TideSnapshot: Codable {
     let extremes: [Extreme]
     let sunEvents: [SunEvent]
     let fetchedAt: Date
+    // Identifiant du fuseau du lieu (absent des anciens instantanés) : les heures s'affichent en heure locale du lieu
+    let timeZoneID: String?
+
+    var timeZone: TimeZone {
+        timeZoneID.flatMap(TimeZone.init(identifier:)) ?? .current
+    }
 }
 
 extension TideSnapshot {
+    // Les marées sont prévisibles longtemps à l'avance : les données ne sont "périmées" que lorsqu'il reste
+    // moins de ~6 h de couverture, c'est-à-dire que l'app doit être rouverte pour recharger la suite
+    func isStale(at date: Date) -> Bool {
+        guard let last = extremes.last else { return true }
+        return last.date < date.addingTimeInterval(6 * 3600)
+    }
+
     func nextTwoExtremes(after date: Date) -> [Extreme] {
         Array(extremes.filter { $0.date >= date }.prefix(2))
     }
@@ -68,8 +81,15 @@ enum TideSnapshotStore {
     static let appGroupID = "group.fr.gcourtot.tide"
     private static let key = "TideWidgetSnapshot"
 
+    // Faux si l'IPA a été signé sans l'entitlement App Group (voir README) : sans lui, l'app et le widget
+    // n'ont pas de conteneur partagé et le widget ne verra jamais de données.
+    static var isAvailable: Bool {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) != nil
+    }
+
     private static var defaults: UserDefaults? {
-        UserDefaults(suiteName: appGroupID)
+        guard isAvailable else { return nil }
+        return UserDefaults(suiteName: appGroupID)
     }
 
     private static let encoder: JSONEncoder = {
@@ -86,7 +106,11 @@ enum TideSnapshotStore {
 
     static func save(_ snapshot: TideSnapshot) {
         guard let data = try? encoder.encode(snapshot) else { return }
-        defaults?.set(data, forKey: key)
+        guard let defaults = defaults else {
+            print("App Group \(appGroupID) indisponible : snapshot du widget non enregistré (IPA signé sans entitlement ?)")
+            return
+        }
+        defaults.set(data, forKey: key)
     }
 
     static func load() -> TideSnapshot? {
