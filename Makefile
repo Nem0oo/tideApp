@@ -1,9 +1,9 @@
-TARGET = iphone:clang:latest:16.6
+TARGET = iphone:clang:latest:17.0
 ARCHS = arm64
 INSTALL_TARGET_PROCESSES = Tide
 include $(THEOS)/makefiles/common.mk
 APPLICATION_NAME = Tide
-Tide_FILES = ContentView.swift TideApp.swift LocationManager.swift TideService.swift SettingsView.swift TideChartView.swift SavedLocation.swift MapViewRepresentable.swift LocationPickerView.swift TideSnapshot.swift
+Tide_FILES = ContentView.swift TideApp.swift LocationManager.swift TideService.swift SettingsView.swift TideChartView.swift SavedLocation.swift LocationPickerView.swift TideSnapshot.swift
 Tide_FRAMEWORKS = UIKit CoreLocation MapKit WidgetKit
 Tide_RESOURCE_DIRS = Resources
 # App Group requis pour partager les données de marée avec le widget (voir TideWidgetExtension_CODESIGN_FLAGS

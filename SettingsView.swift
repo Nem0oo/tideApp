@@ -8,10 +8,10 @@ import SwiftUI
 
 struct SettingsView: View {
     @AppStorage(TideService.apiKeyDefaultsKey) private var apiKey: String = ""
-    @Environment(\.presentationMode) private var presentationMode
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Clé API"),
                         footer: Text("Clé WorldWeatherOnline utilisée pour récupérer les données de marée. Obtenez-en une sur worldweatheronline.com.")) {
@@ -32,9 +32,9 @@ struct SettingsView: View {
             .navigationTitle("Réglages")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("OK") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
             }

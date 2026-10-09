@@ -9,8 +9,8 @@ import CoreLocation
 import WidgetKit
 
 struct ContentView: View {
-    @StateObject private var locationManager = LocationManager()
-    @StateObject private var savedLocationsStore = SavedLocationsStore()
+    @State private var locationManager = LocationManager()
+    @State private var savedLocationsStore = SavedLocationsStore()
     @AppStorage(TideService.apiKeyDefaultsKey) private var apiKey: String = ""
     @State private var tideData: [TideData] = []
     @State private var sunEvents: [SunEvent] = []
@@ -30,6 +30,8 @@ struct ContentView: View {
     // Dernier chargement réussi : sert à rafraîchir au retour au premier plan et quand on a beaucoup bougé
     @State private var lastFetchDate: Date?
     @State private var lastFetchedLocation: CLLocation?
+    // Évite de relancer en boucle le chargement de la suite quand l'API refuse ou ne renvoie plus rien
+    @State private var lastLoadMoreFailure: Date?
     @Environment(\.scenePhase) private var scenePhase
 
     // Délai au-delà duquel un retour au premier plan relance le chargement, et distance de déplacement
@@ -43,7 +45,7 @@ struct ContentView: View {
     private let moreNumberOfDays = 5
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 if apiKey.isEmpty {
                     Spacer()
@@ -119,13 +121,13 @@ struct ContentView: View {
             }
             .navigationTitle("Marées")
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button(action: { showSettings = true }) {
                         Image(systemName: "gearshape")
                             .font(.title2)
                     }
                 }
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     Button(action: { showLocationPicker = true }) {
                         Image(systemName: "map")
                             .font(.title2)
@@ -157,7 +159,7 @@ struct ContentView: View {
             .onAppear {
                 locationManager.startUpdatingLocation()
             }
-            .onChange(of: locationManager.location) { newLocation in
+            .onChange(of: locationManager.location) { _, newLocation in
                 guard let newLocation = newLocation else { return }
                 if !hasFetchedData {
                     refreshTideData()
@@ -168,7 +170,7 @@ struct ContentView: View {
                     refreshTideData(resetting: true)
                 }
             }
-            .onChange(of: scenePhase) { phase in
+            .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
                 // La localisation s'arrête après un fix : on la relance à chaque retour au premier plan
                 locationManager.startUpdatingLocation()
@@ -230,6 +232,7 @@ struct ContentView: View {
     // Appelé par le graphique quand l'utilisateur scrolle près du bord des données déjà chargées
     private func loadMoreTideData() {
         guard !isLoadingMore, !isLoading, let location = effectiveLocation else { return }
+        if let failure = lastLoadMoreFailure, Date().timeIntervalSince(failure) < 60 { return }
         guard let currentMax = tideData.compactMap({ $0.date }).max() else { return }
 
         let nextStart = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: currentMax)) ?? currentMax
@@ -241,12 +244,14 @@ struct ContentView: View {
                 // Le lieu a changé (ou un rafraîchissement a eu lieu) pendant la requête : résultat obsolète
                 guard generation == self.requestGeneration else { return }
                 self.isLoadingMore = false
-                guard let result = result else { return }
-                if !result.tideData.isEmpty {
-                    let existingKeys = Set(self.tideData.map { $0.tideDateTime })
-                    let merged = self.tideData + result.tideData.filter { !existingKeys.contains($0.tideDateTime) }
-                    self.tideData = merged.sorted { $0.tideDateTime < $1.tideDateTime }
+                guard let result = result, !result.tideData.isEmpty else {
+                    self.lastLoadMoreFailure = Date()
+                    return
                 }
+                self.lastLoadMoreFailure = nil
+                let existingKeys = Set(self.tideData.map { $0.tideDateTime })
+                let merged = self.tideData + result.tideData.filter { !existingKeys.contains($0.tideDateTime) }
+                self.tideData = merged.sorted { $0.tideDateTime < $1.tideDateTime }
                 let existingSunrises = Set(self.sunEvents.map { $0.sunrise })
                 let mergedSunEvents = self.sunEvents + result.sunEvents.filter { !existingSunrises.contains($0.sunrise) }
                 self.sunEvents = mergedSunEvents.sorted { $0.sunrise < $1.sunrise }

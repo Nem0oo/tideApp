@@ -5,12 +5,13 @@
 //
  
 import CoreLocation
-import Combine
+import Observation
 
-class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
-    private let locationManager = CLLocationManager()
-    @Published var location: CLLocation?
-    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+@Observable
+final class LocationManager: NSObject, CLLocationManagerDelegate {
+    @ObservationIgnored private let locationManager = CLLocationManager()
+    var location: CLLocation?
+    var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
     var isLocationDenied: Bool {
         authorizationStatus == .denied || authorizationStatus == .restricted
