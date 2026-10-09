@@ -21,6 +21,7 @@ struct MapViewRepresentable: UIViewRepresentable {
         mapView.showsUserLocation = true
 
         let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        tapGesture.delegate = context.coordinator
         mapView.addGestureRecognizer(tapGesture)
 
         if let center = regionToCenter {
@@ -57,11 +58,22 @@ struct MapViewRepresentable: UIViewRepresentable {
         Coordinator(parent: self)
     }
 
-    final class Coordinator: NSObject, MKMapViewDelegate {
+    final class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
         var parent: MapViewRepresentable
 
         init(parent: MapViewRepresentable) {
             self.parent = parent
+        }
+
+        // Un tap sur une annotation (point mémorisé) est géré par `didSelect` : sans ce filtre, le geste
+        // de la carte se déclencherait aussi et écraserait la sélection par la coordonnée (approximative) du doigt.
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            var view = touch.view
+            while let current = view {
+                if current is MKAnnotationView { return false }
+                view = current.superview
+            }
+            return true
         }
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
