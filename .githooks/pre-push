@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Pour chaque tag vX.Y.Z poussé : construit l'IPA localement (bloque le push si le build échoue),
+# puis publie la release GitHub en arrière-plan une fois le tag arrivé sur le remote.
+# Activation (une fois par clone) : git config core.hooksPath .githooks
+# Désactivation ponctuelle : git push --no-verify
+set -u
+root=$(git rev-parse --show-toplevel)
+zero=0000000000000000000000000000000000000000
+while read -r local_ref local_sha _remote_ref _remote_sha; do
+  [[ "$local_ref" =~ ^refs/tags/(v[0-9].*)$ ]] || continue
+  [ "$local_sha" = "$zero" ] && continue   # suppression de tag
+  tag=${BASH_REMATCH[1]}
+  echo "pre-push: tag $tag -> build de l'IPA"
+  RELEASE_REF="$local_sha" "$root/scripts/release.sh" "$tag" --build-only || {
+    echo "pre-push: le build a échoué, push annulé" >&2
+    exit 1
+  }
+  log=${TMPDIR:-/tmp}/tideapp-release-$tag.log
+  RELEASE_REMOTE="$1" nohup "$root/scripts/release.sh" "$tag" --publish >"$log" 2>&1 &
+  echo "pre-push: publication de la release en arrière-plan (log: $log)"
+done
+exit 0

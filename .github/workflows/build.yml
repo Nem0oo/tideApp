@@ -1,14 +1,12 @@
-name: TideApp CI
+name: TideApp CI (Theos, désactivé)
 
+# Désactivé : le build des releases passe par xtool (voir build-xtool.yml).
+# Le code est conservé ; il ne se lance plus que manuellement (onglet Actions > Run workflow).
+# Pour le réactiver, rétablir les déclencheurs push/tags/pull_request d'origine :
+#   push: { branches: [main], tags: ["v*"] }
+#   pull_request: { branches: [main] }
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - "v*"
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   build_ipa:
